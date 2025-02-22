@@ -10,21 +10,18 @@ const commentRoutes = require('./routes/commentRoutes');
 const likeRoutes = require('./routes/likeRoutes');
 const tagRoutes = require('./routes/tagRoutes');
 const userRoutes = require('./routes/userRoutes');
-const sequelize = require('./config/database'); // ✅ Import Sequelize
+const sequelize = require('./config/database');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Frontend URL (for CORS)
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-
-// CORS Configuration
+// ✅ CORS Configuration - Allow Any Frontend
 app.use(cors({
-  origin: FRONTEND_URL, // ✅ Dynamic for dev & prod
+  origin: '*', // Allow requests from any frontend
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  credentials: true // Include credentials if needed
 }));
 
 // Middleware
