@@ -16,12 +16,12 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Allow all origins for CORS
+// ✅ CORS Configuration - Allow Any Frontend
 app.use(cors({
-  origin: '*', // Allow any domain to access the server
-  methods: '*',
-  allowedHeaders: ['Content-Type', 'Authorization'], // Allow necessary headers
-  credentials: true,
+  origin: '*', // Allow requests from any frontend
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true // Include credentials if needed
 }));
 
 // Middleware
