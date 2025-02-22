@@ -24,7 +24,7 @@ const PORT = process.env.PORT || 5000;
 
 // ✅ CORS Configuration
 app.use(cors({
-  origin: '*',
+  origin: ['http://localhost:5173', 'https://forms-p3wmv8nji-abdullah-al-fahads-projects.vercel.app'], // Add Vercel URL
   methods: '*',
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
