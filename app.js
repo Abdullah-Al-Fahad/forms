@@ -1,7 +1,10 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const dotenv = require('dotenv');
 const errorHandler = require('./middleware/errorHandler');
+
+// Import routes
 const authRoutes = require('./routes/authRoutes');
 const templateRoutes = require('./routes/templateRoutes');
 const questionRoutes = require('./routes/questionRoutes');
@@ -10,24 +13,27 @@ const commentRoutes = require('./routes/commentRoutes');
 const likeRoutes = require('./routes/likeRoutes');
 const tagRoutes = require('./routes/tagRoutes');
 const userRoutes = require('./routes/userRoutes');
-const sequelize = require('./config/database');
-require('dotenv').config();
+
+// Import Sequelize instance
+const { sequelize } = require('./models');
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ CORS Configuration - Allow Any Frontend
+// ✅ CORS Configuration
 app.use(cors({
-  origin: '*', // Allow requests from any frontend
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true // Include credentials if needed
+  credentials: true
 }));
 
 // Middleware
 app.use(bodyParser.json());
 
-// Routes
+// API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/questions', questionRoutes);
