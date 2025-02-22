@@ -10,29 +10,22 @@ const commentRoutes = require('./routes/commentRoutes');
 const likeRoutes = require('./routes/likeRoutes');
 const tagRoutes = require('./routes/tagRoutes');
 const userRoutes = require('./routes/userRoutes');
+const sequelize = require('./config/database'); // ✅ Import Sequelize
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Frontend URL (for CORS)
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
 // CORS Configuration
 app.use(cors({
-  origin: 'http://localhost:5173',  // Allow frontend requests
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],  // Allowed methods
-  allowedHeaders: ['Content-Type', 'Authorization'],  // Allowed headers
-  credentials: true  // Allow cookies and auth headers if needed
+  origin: FRONTEND_URL, // ✅ Dynamic for dev & prod
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
-
-// Alternative manual CORS headers (if needed)
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "http://localhost:5173");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-  next();
-});
 
 // Middleware
 app.use(bodyParser.json());
@@ -50,7 +43,14 @@ app.use('/api/users', userRoutes);
 // Error handling
 app.use(errorHandler);
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+// ✅ Connect to DB before starting server
+sequelize.authenticate()
+  .then(() => {
+    console.log('Database connected ✅');
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('Database connection failed ❌', err);
+  });
