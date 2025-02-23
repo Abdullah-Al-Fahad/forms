@@ -63,7 +63,7 @@ exports.login = async (req, res) => {
     const token = jwt.sign(
       { id: user.id, role: user.role }, // Include the user's role in the token payload
       process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: '24h' }
     );
 
     console.log("Login successful for user:", user.id);
