@@ -1,7 +1,8 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
-
+const axios = require('axios');
+require("dotenv").config();
 exports.register = async (req, res) => {
   try {
     console.log("Incoming Register Request:", req.body);  // Log request payload
@@ -74,75 +75,71 @@ exports.login = async (req, res) => {
   }
 };
 
-
-//below code is for salesforce
-const SALESFORCE_CLIENT_ID = process.env.SALESFORCE_CLIENT_ID;
-const SALESFORCE_CLIENT_SECRET = process.env.SALESFORCE_CLIENT_SECRET;
-const SALESFORCE_USERNAME = process.env.SALESFORCE_USERNAME;
-const SALESFORCE_PASSWORD = process.env.SALESFORCE_PASSWORD;
-const SALESFORCE_SECURITY_TOKEN = process.env.SALESFORCE_SECURITY_TOKEN;
-const SALESFORCE_INSTANCE_URL = process.env.SALESFORCE_INSTANCE_URL;
-const SALESFORCE_LOGIN_URL = "https://login.salesforce.com/services/oauth2/token";
-
-// Authenticate and get Salesforce access token
-const getAccessToken = async () => {
+exports.createSalesforceAccount = async (req, res) => {
   try {
-    const response = await axios.post(SALESFORCE_LOGIN_URL, null, {
+    console.log("🔄 Received Salesforce Account Creation Request:", req.body);
+
+    const { userId, company, jobTitle, industry } = req.body;
+
+    // Validate input
+    if (!userId || !company || !jobTitle || !industry) {
+      return res.status(400).json({ message: "All fields are required." });
+    }
+
+    console.log("🔄 Fetching Salesforce Access Token...");
+
+    // Authenticate with Salesforce (inline function)
+    const authResponse = await axios.post("https://login.salesforce.com/services/oauth2/token", null, {
       params: {
         grant_type: "password",
-        client_id: SALESFORCE_CLIENT_ID,
-        client_secret: SALESFORCE_CLIENT_SECRET,
-        username: SALESFORCE_USERNAME,
-        password: `${SALESFORCE_PASSWORD}${SALESFORCE_SECURITY_TOKEN}`,
+        client_id: process.env.SALESFORCE_CLIENT_ID,
+        client_secret: process.env.SALESFORCE_CLIENT_SECRET,
+        username: process.env.SALESFORCE_USERNAME,
+        password: process.env.SALESFORCE_PASSWORD, // No security token needed
       },
     });
 
-    return { accessToken: response.data.access_token, instanceUrl: response.data.instance_url };
-  } catch (error) {
-    console.error("Salesforce Authentication Error:", error.response?.data || error.message);
-    throw new Error("Failed to authenticate with Salesforce");
-  }
-};
+    const accessToken = authResponse.data.access_token;
+    const instanceUrl = authResponse.data.instance_url;
 
-exports.createSalesforceAccount = async (req, res) => {
-  try {
-    const { userId, company, jobTitle, industry } = req.body;
-
-    // Ensure user exists
-    const user = await User.findOne({ where: { id: userId } }); // ✅ Fix: Use `findOne`
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Get Salesforce Access Token
-    const { accessToken } = await getAccessToken();
+    console.log("✅ Salesforce Access Token Received!");
 
     // Step 1: Create an Account in Salesforce
-    const accountResponse = await axios.post(`${SALESFORCE_INSTANCE_URL}/services/data/v57.0/sobjects/Account`, 
-      { Name: company, Industry: industry }, 
+    console.log("🔄 Creating Salesforce Account...");
+    const accountResponse = await axios.post(
+      `${instanceUrl}/services/data/v57.0/sobjects/Account`,
+      { Name: company, Industry: industry },
       { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
     );
 
     const accountId = accountResponse.data.id;
+    console.log("✅ Salesforce Account Created:", accountId);
 
     // Step 2: Create a Contact linked to the Account
-    const contactResponse = await axios.post(`${SALESFORCE_INSTANCE_URL}/services/data/v57.0/sobjects/Contact`, 
+    console.log("🔄 Creating Salesforce Contact...");
+    const contactResponse = await axios.post(
+      `${instanceUrl}/services/data/v57.0/sobjects/Contact`,
       { 
-        LastName: user.username, 
-        Email: user.email, 
+        LastName: "User", 
+        Email: "user@example.com", 
         Title: jobTitle, 
         AccountId: accountId 
       },
       { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
     );
 
+    console.log("✅ Salesforce Contact Created:", contactResponse.data);
+
     res.status(201).json({ 
-      message: 'Salesforce Account & Contact created successfully', 
+      message: "Salesforce Account & Contact created successfully", 
       accountId, 
       contactId: contactResponse.data.id 
     });
   } catch (error) {
-    console.error("Error creating Salesforce Account & Contact:", error.response?.data || error.message);
-    res.status(500).json({ message: "Error in Salesforce CRM Integration" });
+    console.error("❌ Error creating Salesforce Account & Contact:", error.response?.data || error.message);
+    res.status(500).json({ 
+      message: "Salesforce Integration Failed", 
+      error: error.response?.data || error.message 
+    });
   }
 };
