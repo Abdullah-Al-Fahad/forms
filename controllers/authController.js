@@ -73,3 +73,76 @@ exports.login = async (req, res) => {
     res.status(500).json({ message: 'Server error.', error: error.message });
   }
 };
+
+
+//below code is for salesforce
+const SALESFORCE_CLIENT_ID = process.env.SALESFORCE_CLIENT_ID;
+const SALESFORCE_CLIENT_SECRET = process.env.SALESFORCE_CLIENT_SECRET;
+const SALESFORCE_USERNAME = process.env.SALESFORCE_USERNAME;
+const SALESFORCE_PASSWORD = process.env.SALESFORCE_PASSWORD;
+const SALESFORCE_SECURITY_TOKEN = process.env.SALESFORCE_SECURITY_TOKEN;
+const SALESFORCE_INSTANCE_URL = process.env.SALESFORCE_INSTANCE_URL;
+const SALESFORCE_LOGIN_URL = "https://login.salesforce.com/services/oauth2/token";
+
+// Authenticate and get Salesforce access token
+const getAccessToken = async () => {
+  try {
+    const response = await axios.post(SALESFORCE_LOGIN_URL, null, {
+      params: {
+        grant_type: "password",
+        client_id: SALESFORCE_CLIENT_ID,
+        client_secret: SALESFORCE_CLIENT_SECRET,
+        username: SALESFORCE_USERNAME,
+        password: `${SALESFORCE_PASSWORD}${SALESFORCE_SECURITY_TOKEN}`,
+      },
+    });
+
+    return { accessToken: response.data.access_token, instanceUrl: response.data.instance_url };
+  } catch (error) {
+    console.error("Salesforce Authentication Error:", error.response?.data || error.message);
+    throw new Error("Failed to authenticate with Salesforce");
+  }
+};
+
+exports.createSalesforceAccount = async (req, res) => {
+  try {
+    const { userId, company, jobTitle, industry } = req.body;
+
+    // Ensure user exists
+    const user = await User.findOne({ where: { id: userId } }); // ✅ Fix: Use `findOne`
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Get Salesforce Access Token
+    const { accessToken } = await getAccessToken();
+
+    // Step 1: Create an Account in Salesforce
+    const accountResponse = await axios.post(`${SALESFORCE_INSTANCE_URL}/services/data/v57.0/sobjects/Account`, 
+      { Name: company, Industry: industry }, 
+      { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
+    );
+
+    const accountId = accountResponse.data.id;
+
+    // Step 2: Create a Contact linked to the Account
+    const contactResponse = await axios.post(`${SALESFORCE_INSTANCE_URL}/services/data/v57.0/sobjects/Contact`, 
+      { 
+        LastName: user.username, 
+        Email: user.email, 
+        Title: jobTitle, 
+        AccountId: accountId 
+      },
+      { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
+    );
+
+    res.status(201).json({ 
+      message: 'Salesforce Account & Contact created successfully', 
+      accountId, 
+      contactId: contactResponse.data.id 
+    });
+  } catch (error) {
+    console.error("Error creating Salesforce Account & Contact:", error.response?.data || error.message);
+    res.status(500).json({ message: "Error in Salesforce CRM Integration" });
+  }
+};
