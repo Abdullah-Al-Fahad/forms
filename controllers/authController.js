@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { User } = require('../models');
 const axios = require('axios');
 require("dotenv").config();
+
 exports.register = async (req, res) => {
   try {
     console.log("Incoming Register Request:", req.body);  // Log request payload
@@ -62,7 +63,7 @@ exports.login = async (req, res) => {
 
     console.log("Generating JWT token...");
     const token = jwt.sign(
-      { id: user.id, role: user.role }, // Include the user's role in the token payload
+      { id: user.id, role: user.role, email: user.email }, // Include the user's role in the token payload
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -140,6 +141,180 @@ exports.createSalesforceAccount = async (req, res) => {
     res.status(500).json({ 
       message: "Salesforce Integration Failed", 
       error: error.response?.data || error.message 
+    });
+  }
+};
+
+
+
+
+
+
+
+// Jira Configuration
+const JIRA_BASE_URL = "https://itran.atlassian.net";
+const JIRA_EMAIL = "to.abdullah.al.fahad@gmail.com";
+const JIRA_API_TOKEN = "ATATT3xFfGF0C2z4M5krsQ5pfHrXfTBgvB7YAhrjyyAzWHTENkRelbY8nb4vN3iYOMkHUFXmQWQ3P03J4RSMyKSyCTmWY76AfTBzeq_dKFGDbL830sKSDo9i518lOYgm1palOE8jpHmQ3sAZfFTUjVVHudsmpkcqaRkQArLRtsNmorXuQEboMSw=33C96BC0";
+const JIRA_PROJECT_KEY = "IT";
+
+const base64 = Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString("base64");
+const headers = {
+  "Authorization": `Basic ${base64}`,
+  "Accept": "application/json",
+  "Content-Type": "application/json",
+};
+
+async function getJiraUserAccountId(email) {
+  try {
+    console.log(`🔍 Checking Jira account for ${email}...`);
+    const response = await axios.get(
+      `${JIRA_BASE_URL}/rest/api/3/user/search?query=${encodeURIComponent(email)}`,
+      { headers }
+    );
+    if (response.data.length > 0) {
+      console.log(`✅ User ${email} found in Jira.`);
+      return response.data[0].accountId;
+    } else {
+      console.log(`⚠️ User ${email} not found in Jira. Creating user...`);
+      const createResponse = await axios.post(
+        `${JIRA_BASE_URL}/rest/api/3/user`,
+        {
+          emailAddress: email,
+          displayName: email.split('@')[0],
+          products: ["jira-software"],
+        },
+        { headers }
+      );
+      console.log(`✅ User ${email} created and invited. Awaiting account activation...`);
+      return null;
+    }
+  } catch (error) {
+    console.error("❌ Error checking or creating Jira user:", error.response?.data || error.message);
+    return null;
+  }
+}
+
+// 🔹 Create Jira Ticket (Unauthenticated)
+exports.createJiraTicket = async (req, res) => {
+  try {
+    console.log("🔄 Received Jira Ticket Creation Request:", req.body);
+    const { summary, priority, reporterEmail, link, description } = req.body;
+
+    if (!summary || !priority || !reporterEmail || !link || !description) {
+      return res.status(400).json({ message: "All fields are required." });
+    }
+
+    let accountId = await getJiraUserAccountId(reporterEmail);
+
+    if (!accountId) {
+      console.log(`⚠️ User ${reporterEmail} is invited but does not exist yet.`);
+      return res.status(400).json({
+        message: `User ${reporterEmail} has been invited to Jira. Please activate your account and try again.`,
+      });
+    }
+
+    console.log("✅ Jira Reporter ID:", accountId);
+
+    const response = await axios.post(
+      `${JIRA_BASE_URL}/rest/api/3/issue`,
+      {
+        fields: {
+          project: { key: JIRA_PROJECT_KEY },
+          summary: summary,
+          description: {
+            type: "doc",
+            version: 1,
+            content: [
+              {
+                type: "paragraph",
+                content: [
+                  {
+                    type: "text",
+                    text: `${description}\nReference Link: ${link}`,
+                  },
+                ],
+              },
+            ],
+          },
+          issuetype: { name: "Task" },
+          priority: { name: priority },
+          reporter: { accountId: accountId },
+        },
+      },
+      { headers }
+    );
+
+    console.log("✅ Jira Ticket Created:", response.data.key);
+    res.status(201).json({ ticketUrl: `${JIRA_BASE_URL}/browse/${response.data.key}` });
+  } catch (error) {
+    console.error("❌ Error creating Jira ticket:", error.response?.data || error.message);
+    res.status(500).json({ message: "Jira Integration Failed", error: error.response?.data || error.message });
+  }
+};
+
+// 🔹 Fetch Jira Tickets (Unauthenticated, Email from Query)
+exports.getJiraTickets = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, email } = req.query; // Email from query params
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required to fetch tickets." });
+    }
+
+    console.log(`🔄 Fetching Jira tickets for ${email}, page ${page}, limit ${limit}...`);
+
+    const accountId = await getJiraUserAccountId(email);
+
+    if (!accountId) {
+      console.log(`⚠️ User ${email} not found in Jira or account not activated.`);
+      return res.status(400).json({
+        message: `User ${email} not found in Jira or account not activated.`,
+      });
+    }
+
+    const startAt = (page - 1) * limit;
+    const maxResults = limit;
+
+    const response = await axios.get(
+      `${JIRA_BASE_URL}/rest/api/3/search`,
+      {
+        headers,
+        params: {
+          jql: `project=${JIRA_PROJECT_KEY} AND reporter="${accountId}"`,
+          startAt,
+          maxResults,
+          fields: "summary,status,created,updated,key",
+        },
+      }
+    );
+
+    const tickets = response.data.issues.map((issue) => ({
+      key: issue.key,
+      summary: issue.fields.summary,
+      status: issue.fields.status.name,
+      created: issue.fields.created,
+      updated: issue.fields.updated,
+      url: `${JIRA_BASE_URL}/browse/${issue.key}`,
+    }));
+
+    const totalTickets = response.data.total;
+
+    console.log(`✅ Retrieved ${tickets.length} Jira tickets for ${email}`);
+
+    res.status(200).json({
+      tickets,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalTickets / limit),
+        totalTickets,
+        limit: parseInt(limit),
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error fetching Jira tickets:", error.response?.data || error.message);
+    res.status(500).json({
+      message: "Failed to fetch Jira tickets",
+      error: error.response?.data || error.message,
     });
   }
 };
