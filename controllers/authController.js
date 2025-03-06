@@ -80,10 +80,10 @@ exports.createSalesforceAccount = async (req, res) => {
   try {
     console.log("🔄 Received Salesforce Account Creation Request:", req.body);
 
-    const { userId, company, jobTitle, industry } = req.body;
+    const { userId, company, jobTitle, industry, fullName, email } = req.body;
 
     // Validate input
-    if (!userId || !company || !jobTitle || !industry) {
+    if (!userId || !company || !jobTitle || !industry || !fullName || !email) {
       return res.status(400).json({ message: "All fields are required." });
     }
 
@@ -105,7 +105,29 @@ exports.createSalesforceAccount = async (req, res) => {
 
     console.log("✅ Salesforce Access Token Received!");
 
-    // Step 1: Create an Account in Salesforce
+    // Step 1: Check if a Contact with the given email already exists
+    console.log("🔄 Checking for existing contact with email:", email);
+
+    const existingContactResponse = await axios.get(
+      `${instanceUrl}/services/data/v57.0/query`,
+      {
+        params: {
+          q: `SELECT Id FROM Contact WHERE Email = '${email}' LIMIT 1`, // Query for existing contact with the same email
+        },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    // If an existing contact is found, return an error
+    if (existingContactResponse.data.records.length > 0) {
+      return res.status(400).json({
+        message: "A contact with this email already exists. Please use a different email.",
+      });
+    }
+
+    // Step 2: Create an Account in Salesforce
     console.log("🔄 Creating Salesforce Account...");
     const accountResponse = await axios.post(
       `${instanceUrl}/services/data/v57.0/sobjects/Account`,
@@ -116,34 +138,51 @@ exports.createSalesforceAccount = async (req, res) => {
     const accountId = accountResponse.data.id;
     console.log("✅ Salesforce Account Created:", accountId);
 
-    // Step 2: Create a Contact linked to the Account
+    // Step 3: Create a Contact linked to the Account
     console.log("🔄 Creating Salesforce Contact...");
     const contactResponse = await axios.post(
       `${instanceUrl}/services/data/v57.0/sobjects/Contact`,
-      { 
-        LastName: "User", 
-        Email: "user@example.com", 
-        Title: jobTitle, 
-        AccountId: accountId 
+      {
+        FirstName: fullName.split(" ")[0], // Extract first name from full name
+        LastName: fullName.split(" ").slice(1).join(" "), // Extract last name
+        Email: email,
+        Title: jobTitle,
+        AccountId: accountId,
       },
       { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
     );
 
     console.log("✅ Salesforce Contact Created:", contactResponse.data);
 
-    res.status(201).json({ 
-      message: "Salesforce Account & Contact created successfully", 
-      accountId, 
-      contactId: contactResponse.data.id 
+    res.status(201).json({
+      message: "Salesforce Account & Contact created successfully",
+      accountId,
+      contactId: contactResponse.data.id,
     });
   } catch (error) {
     console.error("❌ Error creating Salesforce Account & Contact:", error.response?.data || error.message);
-    res.status(500).json({ 
-      message: "Salesforce Integration Failed", 
-      error: error.response?.data || error.message 
+    res.status(500).json({
+      message: "Salesforce Integration Failed",
+      error: error.response?.data || error.message,
     });
   }
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -193,6 +232,39 @@ async function getJiraUserAccountId(email) {
     return null;
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // 🔹 Create Jira Ticket (Unauthenticated)
 exports.createJiraTicket = async (req, res) => {
