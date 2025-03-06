@@ -154,7 +154,7 @@ exports.createSalesforceAccount = async (req, res) => {
 // Jira Configuration
 const JIRA_BASE_URL = "https://itran.atlassian.net";
 const JIRA_EMAIL = "to.abdullah.al.fahad@gmail.com";
-const JIRA_API_TOKEN = "ATATT3xFfGF0C2z4M5krsQ5pfHrXfTBgvB7YAhrjyyAzWHTENkRelbY8nb4vN3iYOMkHUFXmQWQ3P03J4RSMyKSyCTmWY76AfTBzeq_dKFGDbL830sKSDo9i518lOYgm1palOE8jpHmQ3sAZfFTUjVVHudsmpkcqaRkQArLRtsNmorXuQEboMSw=33C96BC0";
+const JIRA_API_TOKEN = "ATATT3xFfGF0INqCuYEgr5l3tojeEnmGIItsuzwjpBZeh11iJ82Q6RreuD0fgT-Kkw5cM_22J9_RkdA1Q5xt2InQ0xnypm_ld4yNPK9r41JgvnZRPZuie3gEw_jRfZZ4ItbkzZLtXnWqMa0lgmz89d2INZ1fOLBFUAYXHsBM6y2ukv-1fX_hzxQ=91839BCA";
 const JIRA_PROJECT_KEY = "IT";
 
 const base64 = Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString("base64");
